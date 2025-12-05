@@ -62,6 +62,7 @@ class BrushView @JvmOverloads constructor(
     private var currentX = 0f
     private var currentY = 0f
     private var isDrawing = false  // 是否正在绘制（触摸点在圆内）
+    private var isFirstMove = true  // 是否是第一次移动（用于延迟绘制起始点，避免方向错误）
 
     // 蜡笔效果参数
     private val crayonRandom = Random(System.currentTimeMillis())
@@ -213,37 +214,58 @@ class BrushView @JvmOverloads constructor(
                 // 检查触摸点是否在圆形区域内
                 if (isInsideCircle(currentX, currentY)) {
                     isDrawing = true
+                    isFirstMove = true  // 标记还没有移动过
                     
                     // 在开始新笔画前保存当前状态
                     saveToUndoStack()
                     
                     lastX = currentX
                     lastY = currentY
-                    drawPoint(currentX, currentY)
-                    invalidate()
+                    
+                    // 不在这里立即绘制点，而是等到 ACTION_MOVE 时绘制
+                    // 这样可以获取正确的笔画方向，避免毛刷等方向敏感笔刷出现"小尾巴"
+                    // 如果只是点击（没有移动），会在 ACTION_UP 时绘制
                 } else {
                     isDrawing = false
                 }
             }
             MotionEvent.ACTION_MOVE -> {
                 if (isDrawing) {
-                    // 如果当前点在圆内，直接绘制
-                    if (isInsideCircle(currentX, currentY)) {
-                        drawStroke(lastX, lastY, currentX, currentY)
-                        lastX = currentX
-                        lastY = currentY
+                    // 计算目标点（在圆内或限制到圆边上）
+                    val (targetX, targetY) = if (isInsideCircle(currentX, currentY)) {
+                        Pair(currentX, currentY)
                     } else {
-                        // 如果当前点在圆外，将其限制在圆边上
-                        val (clampedX, clampedY) = clampToCircle(currentX, currentY)
-                        drawStroke(lastX, lastY, clampedX, clampedY)
-                        lastX = clampedX
-                        lastY = clampedY
+                        clampToCircle(currentX, currentY)
                     }
+                    
+                    // 如果是第一次移动，并且移动距离足够，绘制从起始点到当前点的笔画
+                    if (isFirstMove) {
+                        val dx = targetX - lastX
+                        val dy = targetY - lastY
+                        val distance = sqrt(dx * dx + dy * dy)
+                        
+                        // 移动距离足够时才认为是真正的移动（避免手指抖动）
+                        if (distance > 2f) {
+                            isFirstMove = false
+                            drawStroke(lastX, lastY, targetX, targetY)
+                        }
+                    } else {
+                        drawStroke(lastX, lastY, targetX, targetY)
+                    }
+                    
+                    lastX = targetX
+                    lastY = targetY
                     invalidate()
                 }
             }
             MotionEvent.ACTION_UP -> {
+                // 如果只是点击（没有移动），在这里绘制一个点
+                if (isDrawing && isFirstMove) {
+                    drawPointWithoutDirection(lastX, lastY)
+                    invalidate()
+                }
                 isDrawing = false
+                isFirstMove = true
             }
         }
 
@@ -328,6 +350,22 @@ class BrushView @JvmOverloads constructor(
     fun canRedo(): Boolean = redoStack.isNotEmpty()
 
     // ==================== 绘制入口 ====================
+
+    /**
+     * 绘制一个无方向的点（用于只点击不拖动的情况）
+     * 对于毛刷等方向敏感的笔刷，绘制一个圆形而不是带方向的刷痕
+     */
+    private fun drawPointWithoutDirection(x: Float, y: Float) {
+        // 只在圆内绘制
+        if (!isInsideCircle(x, y)) return
+        
+        when (currentBrushType) {
+            BrushType.NORMAL -> drawNormalPoint(x, y)
+            BrushType.CRAYON -> drawCrayonPoint(x, y)
+            BrushType.BRISTLE -> drawBristlePointWithoutDirection(x, y)  // 使用无方向版本
+            BrushType.ERASER -> drawEraserPoint(x, y)
+        }
+    }
 
     private fun drawPoint(x: Float, y: Float) {
         // 只在圆内绘制
@@ -482,6 +520,40 @@ class BrushView @JvmOverloads constructor(
 
     private fun drawBristlePoint(x: Float, y: Float) {
         drawBristleDab(x, y, 0f)
+    }
+
+    /**
+     * 绘制无方向的毛刷点（用于只点击不拖动的情况）
+     * 绘制一个圆形散布的点，而不是带方向的刷痕
+     */
+    private fun drawBristlePointWithoutDirection(x: Float, y: Float) {
+        val canvas = drawCanvas ?: return
+        
+        canvas.save()
+        canvas.clipPath(circlePath)
+        
+        val paint = Paint().apply {
+            color = brushColor
+            style = Paint.Style.FILL
+            isAntiAlias = true
+        }
+        
+        // 绘制圆形散布的点，模拟毛刷轻点的效果
+        val radius = brushSize / 2
+        for (i in 0 until bristleCount * 2) {
+            val angle = Random.nextFloat() * 2 * PI.toFloat()
+            val r = radius * sqrt(Random.nextFloat())
+            
+            val px = x + cos(angle) * r
+            val py = y + sin(angle) * r
+            
+            paint.alpha = (150 + Random.nextInt(105))
+            val dotSize = 1.5f + Random.nextFloat() * 2f
+            
+            canvas.drawCircle(px, py, dotSize, paint)
+        }
+        
+        canvas.restore()
     }
 
     private fun drawBristleStroke(startX: Float, startY: Float, endX: Float, endY: Float) {
