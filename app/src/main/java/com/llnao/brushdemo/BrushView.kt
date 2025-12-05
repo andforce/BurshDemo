@@ -10,7 +10,7 @@ import kotlin.random.Random
 
 /**
  * 支持特殊笔刷效果的画图 View
- * 支持蜡笔、毛刷等效果
+ * 支持蜡笔、毛刷、橡皮擦等效果，以及 Undo/Redo 功能
  */
 class BrushView @JvmOverloads constructor(
     context: Context,
@@ -22,7 +22,8 @@ class BrushView @JvmOverloads constructor(
     enum class BrushType {
         NORMAL,     // 普通画笔
         CRAYON,     // 蜡笔
-        BRISTLE     // 毛刷（油漆刷）
+        BRISTLE,    // 毛刷（油漆刷）
+        ERASER      // 橡皮擦
     }
 
     // 画布和路径
@@ -34,6 +35,9 @@ class BrushView @JvmOverloads constructor(
     private var brushColor = Color.BLACK
     private var brushSize = 20f
     private var currentBrushType = BrushType.CRAYON
+
+    // 橡皮擦大小（可以独立设置）
+    private var eraserSize = 40f
 
     // 触摸点记录
     private var lastX = 0f
@@ -49,6 +53,14 @@ class BrushView @JvmOverloads constructor(
     private val bristleCount = 12  // 刷毛数量
     private val bristleOffsets = FloatArray(bristleCount)
     private val bristlePhases = FloatArray(bristleCount)
+
+    // ==================== Undo/Redo 历史记录 ====================
+    private val undoStack = mutableListOf<Bitmap>()
+    private val redoStack = mutableListOf<Bitmap>()
+    private val maxHistorySize = 20  // 最大历史记录数量
+
+    // 状态变化监听器
+    var onHistoryChangedListener: ((canUndo: Boolean, canRedo: Boolean) -> Unit)? = null
 
     init {
         setupBristles()
@@ -69,6 +81,11 @@ class BrushView @JvmOverloads constructor(
             drawCanvas = Canvas(canvasBitmap!!)
             drawCanvas?.drawColor(Color.WHITE)
             generateCrayonTexture()
+            
+            // 初始化时清空历史记录
+            undoStack.clear()
+            redoStack.clear()
+            notifyHistoryChanged()
         }
     }
 
@@ -106,6 +123,9 @@ class BrushView @JvmOverloads constructor(
 
         when (event.action) {
             MotionEvent.ACTION_DOWN -> {
+                // 在开始新笔画前保存当前状态
+                saveToUndoStack()
+                
                 lastX = currentX
                 lastY = currentY
                 drawPoint(currentX, currentY)
@@ -124,11 +144,91 @@ class BrushView @JvmOverloads constructor(
         return true
     }
 
+    // ==================== 历史记录管理 ====================
+
+    private fun saveToUndoStack() {
+        canvasBitmap?.let { bitmap ->
+            // 复制当前画布状态
+            val copy = bitmap.copy(Bitmap.Config.ARGB_8888, true)
+            undoStack.add(copy)
+            
+            // 限制历史记录大小
+            while (undoStack.size > maxHistorySize) {
+                undoStack.removeAt(0).recycle()
+            }
+            
+            // 新操作会清空 redo 栈
+            redoStack.forEach { it.recycle() }
+            redoStack.clear()
+            
+            notifyHistoryChanged()
+        }
+    }
+
+    private fun notifyHistoryChanged() {
+        onHistoryChangedListener?.invoke(canUndo(), canRedo())
+    }
+
+    /**
+     * 撤销上一步操作
+     */
+    fun undo(): Boolean {
+        if (undoStack.isEmpty()) return false
+        
+        // 将当前状态保存到 redo 栈
+        canvasBitmap?.let { bitmap ->
+            redoStack.add(bitmap.copy(Bitmap.Config.ARGB_8888, true))
+        }
+        
+        // 恢复上一个状态
+        val previousState = undoStack.removeAt(undoStack.size - 1)
+        canvasBitmap = previousState
+        drawCanvas = Canvas(canvasBitmap!!)
+        
+        invalidate()
+        notifyHistoryChanged()
+        return true
+    }
+
+    /**
+     * 重做上一步撤销的操作
+     */
+    fun redo(): Boolean {
+        if (redoStack.isEmpty()) return false
+        
+        // 将当前状态保存到 undo 栈
+        canvasBitmap?.let { bitmap ->
+            undoStack.add(bitmap.copy(Bitmap.Config.ARGB_8888, true))
+        }
+        
+        // 恢复下一个状态
+        val nextState = redoStack.removeAt(redoStack.size - 1)
+        canvasBitmap = nextState
+        drawCanvas = Canvas(canvasBitmap!!)
+        
+        invalidate()
+        notifyHistoryChanged()
+        return true
+    }
+
+    /**
+     * 是否可以撤销
+     */
+    fun canUndo(): Boolean = undoStack.isNotEmpty()
+
+    /**
+     * 是否可以重做
+     */
+    fun canRedo(): Boolean = redoStack.isNotEmpty()
+
+    // ==================== 绘制入口 ====================
+
     private fun drawPoint(x: Float, y: Float) {
         when (currentBrushType) {
             BrushType.NORMAL -> drawNormalPoint(x, y)
             BrushType.CRAYON -> drawCrayonPoint(x, y)
             BrushType.BRISTLE -> drawBristlePoint(x, y)
+            BrushType.ERASER -> drawEraserPoint(x, y)
         }
     }
 
@@ -137,6 +237,7 @@ class BrushView @JvmOverloads constructor(
             BrushType.NORMAL -> drawNormalStroke(startX, startY, endX, endY)
             BrushType.CRAYON -> drawCrayonStroke(startX, startY, endX, endY)
             BrushType.BRISTLE -> drawBristleStroke(startX, startY, endX, endY)
+            BrushType.ERASER -> drawEraserStroke(startX, startY, endX, endY)
         }
     }
 
@@ -340,6 +441,30 @@ class BrushView @JvmOverloads constructor(
         }
     }
 
+    // ==================== 橡皮擦效果 ====================
+
+    private fun drawEraserPoint(x: Float, y: Float) {
+        val paint = Paint().apply {
+            color = Color.WHITE
+            strokeWidth = eraserSize
+            style = Paint.Style.FILL
+            isAntiAlias = true
+        }
+        drawCanvas?.drawCircle(x, y, eraserSize / 2, paint)
+    }
+
+    private fun drawEraserStroke(startX: Float, startY: Float, endX: Float, endY: Float) {
+        val paint = Paint().apply {
+            color = Color.WHITE
+            strokeWidth = eraserSize
+            style = Paint.Style.STROKE
+            strokeCap = Paint.Cap.ROUND
+            strokeJoin = Paint.Join.ROUND
+            isAntiAlias = true
+        }
+        drawCanvas?.drawLine(startX, startY, endX, endY, paint)
+    }
+
     // ==================== 公共方法 ====================
 
     /**
@@ -379,18 +504,26 @@ class BrushView @JvmOverloads constructor(
     fun getBrushSize(): Float = brushSize
 
     /**
-     * 清空画布
+     * 设置橡皮擦大小
      */
-    fun clear() {
-        drawCanvas?.drawColor(Color.WHITE)
-        invalidate()
+    fun setEraserSize(size: Float) {
+        eraserSize = size.coerceIn(10f, 150f)
     }
 
     /**
-     * 撤销（需要实现历史记录功能）
+     * 获取橡皮擦大小
      */
-    fun undo() {
-        // TODO: 实现撤销功能
+    fun getEraserSize(): Float = eraserSize
+
+    /**
+     * 清空画布
+     */
+    fun clear() {
+        // 保存当前状态到 undo 栈
+        saveToUndoStack()
+        
+        drawCanvas?.drawColor(Color.WHITE)
+        invalidate()
     }
 
     /**
@@ -404,5 +537,17 @@ class BrushView @JvmOverloads constructor(
     fun setCanvasColor(color: Int) {
         drawCanvas?.drawColor(color)
         invalidate()
+    }
+
+    /**
+     * 释放资源
+     */
+    fun release() {
+        undoStack.forEach { it.recycle() }
+        undoStack.clear()
+        redoStack.forEach { it.recycle() }
+        redoStack.clear()
+        crayonTexture?.recycle()
+        canvasBitmap?.recycle()
     }
 }

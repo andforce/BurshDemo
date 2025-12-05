@@ -40,35 +40,78 @@
             android:id="@+id/btnNormal"
             android:layout_width="wrap_content"
             android:layout_height="40dp"
+            android:minWidth="48dp"
             android:text="普通"
-            android:textSize="12sp" />
+            android:textSize="11sp"
+            android:paddingStart="8dp"
+            android:paddingEnd="8dp" />
 
         <Button
             android:id="@+id/btnCrayon"
             android:layout_width="wrap_content"
             android:layout_height="40dp"
+            android:minWidth="48dp"
             android:text="蜡笔"
-            android:textSize="12sp" />
+            android:textSize="11sp"
+            android:paddingStart="8dp"
+            android:paddingEnd="8dp" />
 
         <Button
             android:id="@+id/btnBristle"
             android:layout_width="wrap_content"
             android:layout_height="40dp"
+            android:minWidth="48dp"
             android:text="毛刷"
-            android:textSize="12sp" />
+            android:textSize="11sp"
+            android:paddingStart="8dp"
+            android:paddingEnd="8dp" />
+
+        <Button
+            android:id="@+id/btnEraser"
+            android:layout_width="wrap_content"
+            android:layout_height="40dp"
+            android:minWidth="48dp"
+            android:text="橡皮"
+            android:textSize="11sp"
+            android:paddingStart="8dp"
+            android:paddingEnd="8dp" />
 
         <View
             android:layout_width="0dp"
             android:layout_height="0dp"
             android:layout_weight="1" />
 
+        <!-- Undo/Redo 按钮 -->
+        <Button
+            android:id="@+id/btnUndo"
+            android:layout_width="wrap_content"
+            android:layout_height="40dp"
+            android:minWidth="48dp"
+            android:text="↩"
+            android:textSize="16sp"
+            android:paddingStart="8dp"
+            android:paddingEnd="8dp" />
+
+        <Button
+            android:id="@+id/btnRedo"
+            android:layout_width="wrap_content"
+            android:layout_height="40dp"
+            android:minWidth="48dp"
+            android:text="↪"
+            android:textSize="16sp"
+            android:paddingStart="8dp"
+            android:paddingEnd="8dp" />
+
         <!-- 清空按钮 -->
         <Button
             android:id="@+id/btnClear"
             android:layout_width="wrap_content"
             android:layout_height="40dp"
+            android:minWidth="48dp"
             android:text="清空"
-            android:textSize="12sp" />
+            android:textSize="11sp"
+            android:paddingStart="8dp"
+            android:paddingEnd="8dp" />
     </LinearLayout>
 
     <!-- 颜色和大小控制栏 -->
@@ -92,52 +135,53 @@
 
         <View
             android:id="@+id/colorBlack"
-            android:layout_width="32dp"
-            android:layout_height="32dp"
+            android:layout_width="28dp"
+            android:layout_height="28dp"
             android:layout_marginStart="4dp"
             android:background="#000000" />
 
         <View
             android:id="@+id/colorRed"
-            android:layout_width="32dp"
-            android:layout_height="32dp"
+            android:layout_width="28dp"
+            android:layout_height="28dp"
             android:layout_marginStart="4dp"
             android:background="#E53935" />
 
         <View
             android:id="@+id/colorBlue"
-            android:layout_width="32dp"
-            android:layout_height="32dp"
+            android:layout_width="28dp"
+            android:layout_height="28dp"
             android:layout_marginStart="4dp"
             android:background="#1E88E5" />
 
         <View
             android:id="@+id/colorGreen"
-            android:layout_width="32dp"
-            android:layout_height="32dp"
+            android:layout_width="28dp"
+            android:layout_height="28dp"
             android:layout_marginStart="4dp"
             android:background="#43A047" />
 
         <View
             android:id="@+id/colorYellow"
-            android:layout_width="32dp"
-            android:layout_height="32dp"
+            android:layout_width="28dp"
+            android:layout_height="28dp"
             android:layout_marginStart="4dp"
             android:background="#FDD835" />
 
         <View
             android:id="@+id/colorOrange"
-            android:layout_width="32dp"
-            android:layout_height="32dp"
+            android:layout_width="28dp"
+            android:layout_height="28dp"
             android:layout_marginStart="4dp"
             android:background="#FB8C00" />
 
         <View
-            android:layout_width="16dp"
+            android:layout_width="8dp"
             android:layout_height="0dp" />
 
         <!-- 笔刷大小 -->
         <TextView
+            android:id="@+id/labelSize"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:text="大小："
