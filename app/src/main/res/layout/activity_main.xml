@@ -7,13 +7,150 @@
     android:layout_height="match_parent"
     tools:context=".MainActivity">
 
-    <TextView
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:text="Hello World!"
-        app:layout_constraintBottom_toBottomOf="parent"
+    <!-- 画布 -->
+    <com.llnao.brushdemo.BrushView
+        android:id="@+id/brushView"
+        android:layout_width="0dp"
+        android:layout_height="0dp"
+        app:layout_constraintBottom_toTopOf="@id/toolBar"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toTopOf="parent" />
+
+    <!-- 工具栏 -->
+    <LinearLayout
+        android:id="@+id/toolBar"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:background="#F5F5F5"
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
+        android:padding="8dp"
+        app:layout_constraintBottom_toBottomOf="parent">
+
+        <!-- 笔刷类型选择 -->
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="笔刷："
+            android:textColor="#333333"
+            android:textSize="14sp" />
+
+        <Button
+            android:id="@+id/btnNormal"
+            android:layout_width="wrap_content"
+            android:layout_height="40dp"
+            android:text="普通"
+            android:textSize="12sp" />
+
+        <Button
+            android:id="@+id/btnCrayon"
+            android:layout_width="wrap_content"
+            android:layout_height="40dp"
+            android:text="蜡笔"
+            android:textSize="12sp" />
+
+        <Button
+            android:id="@+id/btnBristle"
+            android:layout_width="wrap_content"
+            android:layout_height="40dp"
+            android:text="毛刷"
+            android:textSize="12sp" />
+
+        <View
+            android:layout_width="0dp"
+            android:layout_height="0dp"
+            android:layout_weight="1" />
+
+        <!-- 清空按钮 -->
+        <Button
+            android:id="@+id/btnClear"
+            android:layout_width="wrap_content"
+            android:layout_height="40dp"
+            android:text="清空"
+            android:textSize="12sp" />
+    </LinearLayout>
+
+    <!-- 颜色和大小控制栏 -->
+    <LinearLayout
+        android:id="@+id/colorBar"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:background="#EEEEEE"
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
+        android:padding="8dp"
+        app:layout_constraintBottom_toTopOf="@id/toolBar">
+
+        <!-- 颜色选择 -->
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="颜色："
+            android:textColor="#333333"
+            android:textSize="14sp" />
+
+        <View
+            android:id="@+id/colorBlack"
+            android:layout_width="32dp"
+            android:layout_height="32dp"
+            android:layout_marginStart="4dp"
+            android:background="#000000" />
+
+        <View
+            android:id="@+id/colorRed"
+            android:layout_width="32dp"
+            android:layout_height="32dp"
+            android:layout_marginStart="4dp"
+            android:background="#E53935" />
+
+        <View
+            android:id="@+id/colorBlue"
+            android:layout_width="32dp"
+            android:layout_height="32dp"
+            android:layout_marginStart="4dp"
+            android:background="#1E88E5" />
+
+        <View
+            android:id="@+id/colorGreen"
+            android:layout_width="32dp"
+            android:layout_height="32dp"
+            android:layout_marginStart="4dp"
+            android:background="#43A047" />
+
+        <View
+            android:id="@+id/colorYellow"
+            android:layout_width="32dp"
+            android:layout_height="32dp"
+            android:layout_marginStart="4dp"
+            android:background="#FDD835" />
+
+        <View
+            android:id="@+id/colorOrange"
+            android:layout_width="32dp"
+            android:layout_height="32dp"
+            android:layout_marginStart="4dp"
+            android:background="#FB8C00" />
+
+        <View
+            android:layout_width="16dp"
+            android:layout_height="0dp" />
+
+        <!-- 笔刷大小 -->
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="大小："
+            android:textColor="#333333"
+            android:textSize="14sp" />
+
+        <SeekBar
+            android:id="@+id/sizeSeekBar"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:max="95"
+            android:progress="15" />
+    </LinearLayout>
 
 </androidx.constraintlayout.widget.ConstraintLayout>
