@@ -9,8 +9,9 @@ import kotlin.math.*
 import kotlin.random.Random
 
 /**
- * 支持特殊笔刷效果的画图 View
+ * 支持特殊笔刷效果的圆形画图 View
  * 支持蜡笔、毛刷、橡皮擦等效果，以及 Undo/Redo 功能
+ * 只能在圆形区域内绘画
  */
 class BrushView @JvmOverloads constructor(
     context: Context,
@@ -31,6 +32,22 @@ class BrushView @JvmOverloads constructor(
     private var drawCanvas: Canvas? = null
     private val canvasPaint = Paint(Paint.DITHER_FLAG)
 
+    // 圆形画布相关
+    private var centerX = 0f
+    private var centerY = 0f
+    private var circleRadius = 0f
+    private val circlePath = Path()
+    private val borderPaint = Paint().apply {
+        color = Color.GRAY
+        style = Paint.Style.STROKE
+        strokeWidth = 4f
+        isAntiAlias = true
+    }
+    private val outsidePaint = Paint().apply {
+        color = Color.parseColor("#F0F0F0")  // 圆外的背景色
+        style = Paint.Style.FILL
+    }
+
     // 笔刷属性
     private var brushColor = Color.BLACK
     private var brushSize = 20f
@@ -44,6 +61,7 @@ class BrushView @JvmOverloads constructor(
     private var lastY = 0f
     private var currentX = 0f
     private var currentY = 0f
+    private var isDrawing = false  // 是否正在绘制（触摸点在圆内）
 
     // 蜡笔效果参数
     private val crayonRandom = Random(System.currentTimeMillis())
@@ -77,15 +95,47 @@ class BrushView @JvmOverloads constructor(
     override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
         super.onSizeChanged(w, h, oldw, oldh)
         if (w > 0 && h > 0) {
+            // 计算圆形区域（居中，取宽高的较小值作为直径，留出边距）
+            val padding = 20f
+            centerX = w / 2f
+            centerY = h / 2f
+            circleRadius = (min(w, h) / 2f) - padding
+            
+            // 创建圆形裁剪路径
+            circlePath.reset()
+            circlePath.addCircle(centerX, centerY, circleRadius, Path.Direction.CW)
+            
+            // 创建画布
             canvasBitmap = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
             drawCanvas = Canvas(canvasBitmap!!)
-            drawCanvas?.drawColor(Color.WHITE)
+            
+            // 用白色填充圆形区域
+            clearCircleArea()
+            
             generateCrayonTexture()
             
             // 初始化时清空历史记录
             undoStack.clear()
             redoStack.clear()
             notifyHistoryChanged()
+        }
+    }
+
+    /**
+     * 清空圆形区域（只清空圆内）
+     */
+    private fun clearCircleArea() {
+        drawCanvas?.let { canvas ->
+            // 先用透明色清空整个画布
+            canvas.drawColor(Color.TRANSPARENT, PorterDuff.Mode.CLEAR)
+            
+            // 只在圆形区域内填充白色
+            val paint = Paint().apply {
+                color = Color.WHITE
+                style = Paint.Style.FILL
+                isAntiAlias = true
+            }
+            canvas.drawCircle(centerX, centerY, circleRadius, paint)
         }
     }
 
@@ -112,8 +162,45 @@ class BrushView @JvmOverloads constructor(
 
     override fun onDraw(canvas: Canvas) {
         super.onDraw(canvas)
+        
+        // 绘制圆外的背景
+        canvas.drawRect(0f, 0f, width.toFloat(), height.toFloat(), outsidePaint)
+        
+        // 裁剪成圆形区域并绘制画布内容
+        canvas.save()
+        canvas.clipPath(circlePath)
         canvasBitmap?.let {
             canvas.drawBitmap(it, 0f, 0f, canvasPaint)
+        }
+        canvas.restore()
+        
+        // 绘制圆形边框
+        canvas.drawCircle(centerX, centerY, circleRadius, borderPaint)
+    }
+
+    /**
+     * 检查点是否在圆形区域内
+     */
+    private fun isInsideCircle(x: Float, y: Float): Boolean {
+        val dx = x - centerX
+        val dy = y - centerY
+        return (dx * dx + dy * dy) <= (circleRadius * circleRadius)
+    }
+
+    /**
+     * 将点限制在圆形区域内（用于边缘绘制）
+     */
+    private fun clampToCircle(x: Float, y: Float): Pair<Float, Float> {
+        val dx = x - centerX
+        val dy = y - centerY
+        val distance = sqrt(dx * dx + dy * dy)
+        
+        return if (distance <= circleRadius) {
+            Pair(x, y)
+        } else {
+            // 将点移到圆边上
+            val ratio = circleRadius / distance
+            Pair(centerX + dx * ratio, centerY + dy * ratio)
         }
     }
 
@@ -123,24 +210,43 @@ class BrushView @JvmOverloads constructor(
 
         when (event.action) {
             MotionEvent.ACTION_DOWN -> {
-                // 在开始新笔画前保存当前状态
-                saveToUndoStack()
-                
-                lastX = currentX
-                lastY = currentY
-                drawPoint(currentX, currentY)
+                // 检查触摸点是否在圆形区域内
+                if (isInsideCircle(currentX, currentY)) {
+                    isDrawing = true
+                    
+                    // 在开始新笔画前保存当前状态
+                    saveToUndoStack()
+                    
+                    lastX = currentX
+                    lastY = currentY
+                    drawPoint(currentX, currentY)
+                    invalidate()
+                } else {
+                    isDrawing = false
+                }
             }
             MotionEvent.ACTION_MOVE -> {
-                drawStroke(lastX, lastY, currentX, currentY)
-                lastX = currentX
-                lastY = currentY
+                if (isDrawing) {
+                    // 如果当前点在圆内，直接绘制
+                    if (isInsideCircle(currentX, currentY)) {
+                        drawStroke(lastX, lastY, currentX, currentY)
+                        lastX = currentX
+                        lastY = currentY
+                    } else {
+                        // 如果当前点在圆外，将其限制在圆边上
+                        val (clampedX, clampedY) = clampToCircle(currentX, currentY)
+                        drawStroke(lastX, lastY, clampedX, clampedY)
+                        lastX = clampedX
+                        lastY = clampedY
+                    }
+                    invalidate()
+                }
             }
             MotionEvent.ACTION_UP -> {
-                // 触摸结束
+                isDrawing = false
             }
         }
 
-        invalidate()
         return true
     }
 
@@ -224,6 +330,9 @@ class BrushView @JvmOverloads constructor(
     // ==================== 绘制入口 ====================
 
     private fun drawPoint(x: Float, y: Float) {
+        // 只在圆内绘制
+        if (!isInsideCircle(x, y)) return
+        
         when (currentBrushType) {
             BrushType.NORMAL -> drawNormalPoint(x, y)
             BrushType.CRAYON -> drawCrayonPoint(x, y)
@@ -250,7 +359,10 @@ class BrushView @JvmOverloads constructor(
             style = Paint.Style.FILL
             isAntiAlias = true
         }
+        drawCanvas?.save()
+        drawCanvas?.clipPath(circlePath)
         drawCanvas?.drawCircle(x, y, brushSize / 2, paint)
+        drawCanvas?.restore()
     }
 
     private fun drawNormalStroke(startX: Float, startY: Float, endX: Float, endY: Float) {
@@ -262,7 +374,10 @@ class BrushView @JvmOverloads constructor(
             strokeJoin = Paint.Join.ROUND
             isAntiAlias = true
         }
+        drawCanvas?.save()
+        drawCanvas?.clipPath(circlePath)
         drawCanvas?.drawLine(startX, startY, endX, endY, paint)
+        drawCanvas?.restore()
     }
 
     // ==================== 蜡笔效果 ====================
@@ -288,6 +403,11 @@ class BrushView @JvmOverloads constructor(
 
     private fun drawCrayonDab(centerX: Float, centerY: Float, size: Float) {
         val canvas = drawCanvas ?: return
+        
+        // 裁剪到圆形区域
+        canvas.save()
+        canvas.clipPath(circlePath)
+        
         val paint = Paint().apply {
             color = brushColor
             style = Paint.Style.FILL
@@ -354,6 +474,8 @@ class BrushView @JvmOverloads constructor(
             canvas.drawPath(path, paint)
             paint.style = Paint.Style.FILL
         }
+        
+        canvas.restore()
     }
 
     // ==================== 毛刷效果（油漆刷） ====================
@@ -380,6 +502,10 @@ class BrushView @JvmOverloads constructor(
 
     private fun drawBristleDab(centerX: Float, centerY: Float, strokeAngle: Float) {
         val canvas = drawCanvas ?: return
+        
+        // 裁剪到圆形区域
+        canvas.save()
+        canvas.clipPath(circlePath)
         
         // 刷毛垂直于笔画方向
         val perpAngle = strokeAngle + PI.toFloat() / 2
@@ -439,6 +565,8 @@ class BrushView @JvmOverloads constructor(
             
             canvas.drawCircle(dropX, dropY, Random.nextFloat() * 2f + 1f, paint)
         }
+        
+        canvas.restore()
     }
 
     // ==================== 橡皮擦效果 ====================
@@ -450,7 +578,10 @@ class BrushView @JvmOverloads constructor(
             style = Paint.Style.FILL
             isAntiAlias = true
         }
+        drawCanvas?.save()
+        drawCanvas?.clipPath(circlePath)
         drawCanvas?.drawCircle(x, y, eraserSize / 2, paint)
+        drawCanvas?.restore()
     }
 
     private fun drawEraserStroke(startX: Float, startY: Float, endX: Float, endY: Float) {
@@ -462,7 +593,10 @@ class BrushView @JvmOverloads constructor(
             strokeJoin = Paint.Join.ROUND
             isAntiAlias = true
         }
+        drawCanvas?.save()
+        drawCanvas?.clipPath(circlePath)
         drawCanvas?.drawLine(startX, startY, endX, endY, paint)
+        drawCanvas?.restore()
     }
 
     // ==================== 公共方法 ====================
@@ -516,28 +650,75 @@ class BrushView @JvmOverloads constructor(
     fun getEraserSize(): Float = eraserSize
 
     /**
-     * 清空画布
+     * 清空画布（只清空圆形区域内）
      */
     fun clear() {
         // 保存当前状态到 undo 栈
         saveToUndoStack()
         
-        drawCanvas?.drawColor(Color.WHITE)
+        clearCircleArea()
         invalidate()
     }
 
     /**
-     * 获取当前画布的 Bitmap
+     * 获取当前画布的 Bitmap（圆形区域）
      */
-    fun getBitmap(): Bitmap? = canvasBitmap?.copy(Bitmap.Config.ARGB_8888, false)
+    fun getBitmap(): Bitmap? {
+        val bitmap = canvasBitmap?.copy(Bitmap.Config.ARGB_8888, true) ?: return null
+        
+        // 创建圆形遮罩的输出
+        val output = Bitmap.createBitmap(bitmap.width, bitmap.height, Bitmap.Config.ARGB_8888)
+        val canvas = Canvas(output)
+        
+        val paint = Paint().apply {
+            isAntiAlias = true
+        }
+        
+        // 绘制圆形区域
+        canvas.drawCircle(centerX, centerY, circleRadius, paint)
+        paint.xfermode = PorterDuffXfermode(PorterDuff.Mode.SRC_IN)
+        canvas.drawBitmap(bitmap, 0f, 0f, paint)
+        
+        bitmap.recycle()
+        return output
+    }
 
     /**
-     * 设置背景颜色
+     * 设置背景颜色（圆形区域内）
      */
     fun setCanvasColor(color: Int) {
+        drawCanvas?.save()
+        drawCanvas?.clipPath(circlePath)
         drawCanvas?.drawColor(color)
+        drawCanvas?.restore()
         invalidate()
     }
+
+    /**
+     * 设置圆形边框颜色
+     */
+    fun setBorderColor(color: Int) {
+        borderPaint.color = color
+        invalidate()
+    }
+
+    /**
+     * 设置圆形边框宽度
+     */
+    fun setBorderWidth(width: Float) {
+        borderPaint.strokeWidth = width
+        invalidate()
+    }
+
+    /**
+     * 获取圆形半径
+     */
+    fun getCircleRadius(): Float = circleRadius
+
+    /**
+     * 获取圆心坐标
+     */
+    fun getCircleCenter(): Pair<Float, Float> = Pair(centerX, centerY)
 
     /**
      * 释放资源
