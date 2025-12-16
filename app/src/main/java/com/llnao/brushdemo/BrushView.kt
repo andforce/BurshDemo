@@ -736,22 +736,33 @@ class BrushView @JvmOverloads constructor(
      * 获取当前画布的 Bitmap（圆形区域）
      */
     fun getBitmap(): Bitmap? {
-        val bitmap = canvasBitmap?.copy(Bitmap.Config.ARGB_8888, true) ?: return null
-        
-        // 创建圆形遮罩的输出
-        val output = Bitmap.createBitmap(bitmap.width, bitmap.height, Bitmap.Config.ARGB_8888)
+        val sourceBitmap = canvasBitmap ?: return null
+
+        // 计算圆形区域的边界
+        val diameter = (circleRadius * 2).toInt()
+        val left = (centerX - circleRadius).toInt()
+        val top = (centerY - circleRadius).toInt()
+
+        // 创建正方形的输出 Bitmap（大小为圆的直径）
+        val output = Bitmap.createBitmap(diameter, diameter, Bitmap.Config.ARGB_8888)
         val canvas = Canvas(output)
-        
+
         val paint = Paint().apply {
             isAntiAlias = true
         }
-        
-        // 绘制圆形区域
-        canvas.drawCircle(centerX, centerY, circleRadius, paint)
+
+        // 在新 Bitmap 中心绘制圆形遮罩
+        val outputRadius = diameter / 2f
+        canvas.drawCircle(outputRadius, outputRadius, outputRadius, paint)
+
+        // 使用 SRC_IN 模式，只保留圆形区域内的像素
         paint.xfermode = PorterDuffXfermode(PorterDuff.Mode.SRC_IN)
-        canvas.drawBitmap(bitmap, 0f, 0f, paint)
-        
-        bitmap.recycle()
+
+        // 从原始 Bitmap 中裁剪圆形区域并绘制
+        val srcRect = Rect(left, top, left + diameter, top + diameter)
+        val dstRect = Rect(0, 0, diameter, diameter)
+        canvas.drawBitmap(sourceBitmap, srcRect, dstRect, paint)
+
         return output
     }
 

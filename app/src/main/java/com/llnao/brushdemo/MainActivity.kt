@@ -1,14 +1,26 @@
 package com.llnao.brushdemo
 
+import android.content.ContentValues
+import android.graphics.Bitmap
 import android.graphics.Color
+import android.os.Build
 import android.os.Bundle
+import android.os.Environment
+import android.provider.MediaStore
 import android.widget.Button
 import android.widget.SeekBar
 import android.widget.TextView
+import android.widget.Toast
 import android.view.View
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
+import java.io.File
+import java.io.FileOutputStream
+import java.io.OutputStream
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 class MainActivity : AppCompatActivity() {
 
@@ -87,6 +99,11 @@ class MainActivity : AppCompatActivity() {
             brushView.clear()
         }
 
+        // 保存按钮
+        findViewById<Button>(R.id.btnSave).setOnClickListener {
+            saveImage()
+        }
+
         // 颜色选择
         findViewById<View>(R.id.colorBlack).setOnClickListener {
             brushView.setBrushColor(Color.BLACK)
@@ -129,6 +146,75 @@ class MainActivity : AppCompatActivity() {
 
         // 默认选中蜡笔
         updateBrushTypeButtons(BrushView.BrushType.CRAYON)
+    }
+
+    /**
+     * 保存图片到相册
+     */
+    private fun saveImage() {
+        val bitmap = brushView.getBitmap()
+        if (bitmap == null) {
+            Toast.makeText(this, "获取图片失败", Toast.LENGTH_SHORT).show()
+            return
+        }
+
+        try {
+            val fileName = "BrushDemo_${SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault()).format(Date())}.png"
+            var outputStream: OutputStream? = null
+            var savedPath = ""
+
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                // Android 10+ 使用 MediaStore
+                val contentValues = ContentValues().apply {
+                    put(MediaStore.Images.Media.DISPLAY_NAME, fileName)
+                    put(MediaStore.Images.Media.MIME_TYPE, "image/png")
+                    put(MediaStore.Images.Media.RELATIVE_PATH, Environment.DIRECTORY_PICTURES + "/BrushDemo")
+                    put(MediaStore.Images.Media.IS_PENDING, 1)
+                }
+
+                val uri = contentResolver.insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, contentValues)
+                if (uri != null) {
+                    outputStream = contentResolver.openOutputStream(uri)
+                    bitmap.compress(Bitmap.CompressFormat.PNG, 100, outputStream!!)
+                    outputStream.close()
+
+                    // 标记保存完成
+                    contentValues.clear()
+                    contentValues.put(MediaStore.Images.Media.IS_PENDING, 0)
+                    contentResolver.update(uri, contentValues, null, null)
+
+                    savedPath = "Pictures/BrushDemo/$fileName"
+                }
+            } else {
+                // Android 9 及以下使用传统方式
+                val picturesDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_PICTURES)
+                val appDir = File(picturesDir, "BrushDemo")
+                if (!appDir.exists()) {
+                    appDir.mkdirs()
+                }
+
+                val file = File(appDir, fileName)
+                outputStream = FileOutputStream(file)
+                bitmap.compress(Bitmap.CompressFormat.PNG, 100, outputStream)
+                outputStream.close()
+
+                // 通知媒体库更新
+                val values = ContentValues().apply {
+                    put(MediaStore.Images.Media.DATA, file.absolutePath)
+                    put(MediaStore.Images.Media.MIME_TYPE, "image/png")
+                }
+                contentResolver.insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, values)
+
+                savedPath = file.absolutePath
+            }
+
+            bitmap.recycle()
+            Toast.makeText(this, "图片已保存到: $savedPath", Toast.LENGTH_LONG).show()
+
+        } catch (e: Exception) {
+            e.printStackTrace()
+            Toast.makeText(this, "保存失败: ${e.message}", Toast.LENGTH_SHORT).show()
+        }
     }
 
     private fun switchToBrushMode(type: BrushView.BrushType) {
