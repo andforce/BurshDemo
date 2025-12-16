@@ -194,7 +194,7 @@
             android:layout_height="wrap_content"
             android:layout_weight="1"
             android:max="95"
-            android:progress="15" />
+            android:progress="28" />
     </LinearLayout>
 
 </androidx.constraintlayout.widget.ConstraintLayout>

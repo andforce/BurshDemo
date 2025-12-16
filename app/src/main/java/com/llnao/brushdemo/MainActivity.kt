@@ -19,7 +19,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var labelSize: TextView
 
     // 记住画笔模式下的大小
-    private var savedBrushSize = 20
+    private var savedBrushSize = 28
     private var savedEraserSize = 40
 
     override fun onCreate(savedInstanceState: Bundle?) {
