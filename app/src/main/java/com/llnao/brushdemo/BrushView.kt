@@ -43,10 +43,7 @@ class BrushView @JvmOverloads constructor(
         strokeWidth = 4f
         isAntiAlias = true
     }
-    private val outsidePaint = Paint().apply {
-        color = Color.parseColor("#F0F0F0")  // 圆外的背景色
-        style = Paint.Style.FILL
-    }
+    // 不再需要圆外背景画笔，整个背景都是透明的
 
     // 笔刷属性
     private var brushColor = Color.BLACK
@@ -127,16 +124,8 @@ class BrushView @JvmOverloads constructor(
      */
     private fun clearCircleArea() {
         drawCanvas?.let { canvas ->
-            // 先用透明色清空整个画布
+            // 用透明色清空整个画布（包括圆形区域）
             canvas.drawColor(Color.TRANSPARENT, PorterDuff.Mode.CLEAR)
-            
-            // 只在圆形区域内填充白色
-            val paint = Paint().apply {
-                color = Color.WHITE
-                style = Paint.Style.FILL
-                isAntiAlias = true
-            }
-            canvas.drawCircle(centerX, centerY, circleRadius, paint)
         }
     }
 
@@ -164,8 +153,7 @@ class BrushView @JvmOverloads constructor(
     override fun onDraw(canvas: Canvas) {
         super.onDraw(canvas)
         
-        // 绘制圆外的背景
-        canvas.drawRect(0f, 0f, width.toFloat(), height.toFloat(), outsidePaint)
+        // 整个背景透明，不需要额外绘制
         
         // 裁剪成圆形区域并绘制画布内容
         canvas.save()
@@ -645,10 +633,11 @@ class BrushView @JvmOverloads constructor(
 
     private fun drawEraserPoint(x: Float, y: Float) {
         val paint = Paint().apply {
-            color = Color.WHITE
+            color = Color.TRANSPARENT
             strokeWidth = eraserSize
             style = Paint.Style.FILL
             isAntiAlias = true
+            xfermode = PorterDuffXfermode(PorterDuff.Mode.CLEAR)
         }
         drawCanvas?.save()
         drawCanvas?.clipPath(circlePath)
@@ -658,12 +647,13 @@ class BrushView @JvmOverloads constructor(
 
     private fun drawEraserStroke(startX: Float, startY: Float, endX: Float, endY: Float) {
         val paint = Paint().apply {
-            color = Color.WHITE
+            color = Color.TRANSPARENT
             strokeWidth = eraserSize
             style = Paint.Style.STROKE
             strokeCap = Paint.Cap.ROUND
             strokeJoin = Paint.Join.ROUND
             isAntiAlias = true
+            xfermode = PorterDuffXfermode(PorterDuff.Mode.CLEAR)
         }
         drawCanvas?.save()
         drawCanvas?.clipPath(circlePath)
@@ -730,6 +720,47 @@ class BrushView @JvmOverloads constructor(
         
         clearCircleArea()
         invalidate()
+    }
+
+    /**
+     * 计算圆形区域内涂抹覆盖率（百分比）
+     * @return 覆盖率 0.0 - 1.0
+     */
+    fun getDrawnCoverageRate(): Float {
+        val bitmap = canvasBitmap ?: return 0f
+
+        val left = (centerX - circleRadius).toInt()
+        val top = (centerY - circleRadius).toInt()
+        val right = (centerX + circleRadius).toInt()
+        val bottom = (centerY + circleRadius).toInt()
+
+        var totalPixels = 0
+        var drawnPixels = 0
+
+        // 采样间隔（避免遍历所有像素，提高性能）
+        val sampleStep = 3
+
+        for (y in top until bottom step sampleStep) {
+            for (x in left until right step sampleStep) {
+                // 检查点是否在圆内
+                val dx = x - centerX
+                val dy = y - centerY
+                if (dx * dx + dy * dy <= circleRadius * circleRadius) {
+                    totalPixels++
+
+                    // 检查该像素是否已被涂抹（不是透明背景）
+                    if (x >= 0 && x < bitmap.width && y >= 0 && y < bitmap.height) {
+                        val pixel = bitmap.getPixel(x, y)
+                        // 如果像素的透明度大于阈值，则认为已被涂抹
+                        if (Color.alpha(pixel) > 128) {
+                            drawnPixels++
+                        }
+                    }
+                }
+            }
+        }
+
+        return if (totalPixels > 0) drawnPixels.toFloat() / totalPixels else 0f
     }
 
     /**

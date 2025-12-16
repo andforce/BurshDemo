@@ -152,6 +152,32 @@ class MainActivity : AppCompatActivity() {
      * 保存图片到相册
      */
     private fun saveImage() {
+        // 检查涂抹覆盖率
+        val coverageRate = brushView.getDrawnCoverageRate()
+        val coveragePercent = (coverageRate * 100).toInt()
+
+        if (coverageRate < 0.6f) {
+            // 覆盖率不足60%，显示提示
+            val message = "当前涂抹覆盖率仅为 ${coveragePercent}%，建议至少达到 60% 再保存。\n是否继续保存？"
+            androidx.appcompat.app.AlertDialog.Builder(this)
+                .setTitle("提示")
+                .setMessage(message)
+                .setPositiveButton("继续保存") { _, _ ->
+                    performSaveImage()
+                }
+                .setNegativeButton("取消", null)
+                .show()
+            return
+        }
+
+        // 覆盖率达标，直接保存
+        performSaveImage()
+    }
+
+    /**
+     * 执行保存图片操作
+     */
+    private fun performSaveImage() {
         val bitmap = brushView.getBitmap()
         if (bitmap == null) {
             Toast.makeText(this, "获取图片失败", Toast.LENGTH_SHORT).show()
