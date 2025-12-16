@@ -13,7 +13,7 @@
         android:id="@+id/brushView"
         android:layout_width="400dp"
         android:layout_height="400dp"
-        android:background="#00000000"
+        android:background="@drawable/icon_draw_bg"
         app:layout_constraintBottom_toTopOf="@id/toolBar"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"

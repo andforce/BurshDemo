@@ -40,7 +40,7 @@ class BrushView @JvmOverloads constructor(
     private val borderPaint = Paint().apply {
         color = Color.GRAY
         style = Paint.Style.STROKE
-        strokeWidth = 4f
+        strokeWidth = 0f
         isAntiAlias = true
     }
     // 不再需要圆外背景画笔，整个背景都是透明的
@@ -73,7 +73,7 @@ class BrushView @JvmOverloads constructor(
     // ==================== Undo/Redo 历史记录 ====================
     private val undoStack = mutableListOf<Bitmap>()
     private val redoStack = mutableListOf<Bitmap>()
-    private val maxHistorySize = 20  // 最大历史记录数量
+    private val maxHistorySize = 5  // 最大历史记录数量
 
     // 状态变化监听器
     var onHistoryChangedListener: ((canUndo: Boolean, canRedo: Boolean) -> Unit)? = null
@@ -94,7 +94,7 @@ class BrushView @JvmOverloads constructor(
         super.onSizeChanged(w, h, oldw, oldh)
         if (w > 0 && h > 0) {
             // 计算圆形区域（居中，取宽高的较小值作为直径，留出边距）
-            val padding = 20f
+            val padding = 0f
             centerX = w / 2f
             centerY = h / 2f
             circleRadius = (min(w, h) / 2f) - padding
