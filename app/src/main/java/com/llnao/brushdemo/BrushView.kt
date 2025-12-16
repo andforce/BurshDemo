@@ -107,7 +107,7 @@ class BrushView @JvmOverloads constructor(
             canvasBitmap = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
             drawCanvas = Canvas(canvasBitmap!!)
             
-            // 用白色填充圆形区域
+            // 初始化为透明画布（圆形区域内外均为透明）
             clearCircleArea()
             
             generateCrayonTexture()
@@ -764,7 +764,7 @@ class BrushView @JvmOverloads constructor(
     }
 
     /**
-     * 获取当前画布的 Bitmap（圆形区域）
+     * 获取当前画布的 Bitmap（圆形区域，背景透明）
      */
     fun getBitmap(): Bitmap? {
         val sourceBitmap = canvasBitmap ?: return null
@@ -774,25 +774,31 @@ class BrushView @JvmOverloads constructor(
         val left = (centerX - circleRadius).toInt()
         val top = (centerY - circleRadius).toInt()
 
-        // 创建正方形的输出 Bitmap（大小为圆的直径）
+        // 创建正方形的输出 Bitmap（大小为圆的直径，背景透明）
         val output = Bitmap.createBitmap(diameter, diameter, Bitmap.Config.ARGB_8888)
         val canvas = Canvas(output)
+        // 显式清空，确保输出背景为全透明（避免某些实现下未初始化像素导致“白底”观感）
+        canvas.drawColor(Color.TRANSPARENT, PorterDuff.Mode.CLEAR)
 
+        // 创建圆形裁剪路径
+        val outputRadius = diameter / 2f
+        val clipPath = Path().apply {
+            addCircle(outputRadius, outputRadius, outputRadius, Path.Direction.CW)
+        }
+
+        // 使用圆形路径裁剪
+        canvas.save()
+        canvas.clipPath(clipPath)
+
+        // 从原始 Bitmap 中裁剪圆形区域并绘制
         val paint = Paint().apply {
             isAntiAlias = true
         }
-
-        // 在新 Bitmap 中心绘制圆形遮罩
-        val outputRadius = diameter / 2f
-        canvas.drawCircle(outputRadius, outputRadius, outputRadius, paint)
-
-        // 使用 SRC_IN 模式，只保留圆形区域内的像素
-        paint.xfermode = PorterDuffXfermode(PorterDuff.Mode.SRC_IN)
-
-        // 从原始 Bitmap 中裁剪圆形区域并绘制
         val srcRect = Rect(left, top, left + diameter, top + diameter)
         val dstRect = Rect(0, 0, diameter, diameter)
         canvas.drawBitmap(sourceBitmap, srcRect, dstRect, paint)
+
+        canvas.restore()
 
         return output
     }

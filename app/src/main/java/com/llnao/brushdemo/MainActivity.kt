@@ -2,11 +2,17 @@ package com.llnao.brushdemo
 
 import android.content.ContentValues
 import android.graphics.Bitmap
+import android.graphics.BitmapFactory
 import android.graphics.Color
+import android.graphics.Shader
+import android.graphics.drawable.BitmapDrawable
+import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.os.Environment
 import android.provider.MediaStore
+import android.widget.FrameLayout
+import android.widget.ImageView
 import android.widget.Button
 import android.widget.SeekBar
 import android.widget.TextView
@@ -188,6 +194,8 @@ class MainActivity : AppCompatActivity() {
             val fileName = "BrushDemo_${SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault()).format(Date())}.png"
             var outputStream: OutputStream? = null
             var savedPath = ""
+            var savedUri: Uri? = null
+            var savedFile: File? = null
 
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
                 // Android 10+ 使用 MediaStore
@@ -210,6 +218,7 @@ class MainActivity : AppCompatActivity() {
                     contentResolver.update(uri, contentValues, null, null)
 
                     savedPath = "Pictures/BrushDemo/$fileName"
+                    savedUri = uri
                 }
             } else {
                 // Android 9 及以下使用传统方式
@@ -229,17 +238,98 @@ class MainActivity : AppCompatActivity() {
                     put(MediaStore.Images.Media.DATA, file.absolutePath)
                     put(MediaStore.Images.Media.MIME_TYPE, "image/png")
                 }
-                contentResolver.insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, values)
+                savedUri = contentResolver.insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, values)
 
                 savedPath = file.absolutePath
+                savedFile = file
             }
 
             bitmap.recycle()
             Toast.makeText(this, "图片已保存到: $savedPath", Toast.LENGTH_LONG).show()
+            showSavedImagePreview(savedUri, savedFile)
 
         } catch (e: Exception) {
             e.printStackTrace()
             Toast.makeText(this, "保存失败: ${e.message}", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    /**
+     * 保存后立即预览：底层棋盘格，上层显示图片，用于验证 PNG 是否真的带透明通道。
+     */
+    private fun showSavedImagePreview(uri: Uri?, file: File?) {
+        try {
+            val previewBitmap = when {
+                uri != null -> contentResolver.openInputStream(uri)?.use { input ->
+                    BitmapFactory.decodeStream(input)
+                }
+                file != null -> BitmapFactory.decodeFile(file.absolutePath)
+                else -> null
+            }
+
+            if (previewBitmap == null) {
+                Toast.makeText(this, "预览失败：无法读取已保存的图片", Toast.LENGTH_SHORT).show()
+                return
+            }
+
+            val imageView = ImageView(this).apply {
+                scaleType = ImageView.ScaleType.FIT_CENTER
+                setImageBitmap(previewBitmap)
+                adjustViewBounds = true
+            }
+
+            val container = FrameLayout(this).apply {
+                background = createCheckerboardDrawable()
+                val padding = (16 * resources.displayMetrics.density).toInt()
+                setPadding(padding, padding, padding, padding)
+                addView(
+                    imageView,
+                    FrameLayout.LayoutParams(
+                        FrameLayout.LayoutParams.MATCH_PARENT,
+                        FrameLayout.LayoutParams.WRAP_CONTENT
+                    )
+                )
+            }
+
+            androidx.appcompat.app.AlertDialog.Builder(this)
+                .setTitle("保存预览（透明校验）")
+                .setMessage("下方是棋盘格背景：如果图片背景是真透明，会透出棋盘格。")
+                .setView(container)
+                .setPositiveButton("关闭") { dialog, _ ->
+                    dialog.dismiss()
+                    // 预览结束再回收，避免部分设备上 ImageView 还在使用导致异常
+                    previewBitmap.recycle()
+                }
+                .setOnCancelListener {
+                    if (!previewBitmap.isRecycled) previewBitmap.recycle()
+                }
+                .show()
+        } catch (e: Exception) {
+            Toast.makeText(this, "预览失败: ${e.message}", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    private fun createCheckerboardDrawable(): BitmapDrawable {
+        // 8dp 的棋盘格单元（两色交错），然后平铺
+        val cell = (8 * resources.displayMetrics.density).toInt().coerceAtLeast(4)
+        val size = cell * 2
+        val bmp = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
+        val c = android.graphics.Canvas(bmp)
+        val paint = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG)
+
+        val light = Color.parseColor("#EEEEEE")
+        val dark = Color.parseColor("#CFCFCF")
+
+        // 2x2 方块交错
+        paint.color = light
+        c.drawRect(0f, 0f, cell.toFloat(), cell.toFloat(), paint)
+        c.drawRect(cell.toFloat(), cell.toFloat(), size.toFloat(), size.toFloat(), paint)
+        paint.color = dark
+        c.drawRect(cell.toFloat(), 0f, size.toFloat(), cell.toFloat(), paint)
+        c.drawRect(0f, cell.toFloat(), cell.toFloat(), size.toFloat(), paint)
+
+        return BitmapDrawable(resources, bmp).apply {
+            setTileModeXY(Shader.TileMode.REPEAT, Shader.TileMode.REPEAT)
         }
     }
 
